@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Interactive Resume Builder</title>
+  <style>
+    :root{--muted:#666;--accent:#0b63d6}
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#f4f6f9;margin:0;color:#222}
+    .wrap{max-width:1100px;margin:18px auto;padding:16px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+    header h1{margin:0;font-size:1.2rem}
+    .actions{display:flex;gap:8px}
+    button{cursor:pointer;border:0;border-radius:8px;padding:8px 12px;background:#333;color:#fff}
+    .layout{display:grid;grid-template-columns:1fr 420px;gap:18px}
+    .panel{background:#fff;padding:14px;border-radius:10px;box-shadow:0 6px 18px rgba(15,20,30,.06)}
+    label{display:block;margin-top:8px;font-weight:600}
+    input,textarea,select{width:100%;padding:8px;border-radius:8px;border:1px solid #ddd;margin-top:6px;font-size:0.95rem}
+    textarea{min-height:90px;resize:vertical}
+    .row{display:flex;gap:8px}
+    .edu-item,.exp-item{background:#fafafa;padding:10px;border-radius:8px;margin-top:8px;position:relative}
+    .remove-btn{position:absolute;right:8px;top:8px;background:#e74c3c;padding:6px;border-radius:6px;cursor:pointer;color:#fff;border:none}
+    .resume-preview{padding:12px}
+    .resume-header{display:flex;justify-content:space-between;align-items:center}
+    .progress-bar{height:10px;background:#eee;border-radius:999px;overflow:hidden;margin-top:8px}
+    .progress{height:100%;width:0;background:var(--accent);transition:width .35s}
+    .skills-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+    .skill-tag{padding:6px 8px;border-radius:999px;background:#eef6ff;border:1px solid #dbeeff;color:#03396c;font-size:.9rem}
+    /* responsive */
+    @media (max-width:980px){ .layout{grid-template-columns:1fr} }
+    /* print */
+    @media print{
+      body{background:#fff}
+      .controls, .panel button{display:none}
+      .layout{grid-template-columns:1fr}
+      .panel{box-shadow:none;border:0}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Interactive Resume Builder</h1>
+      <div class="actions">
+        <button onclick="printResume()">Download / Print</button>
+        <button onclick="clearForm()" style="background:#666">Clear</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <!-- Form panel -->
+      <section class="panel" aria-labelledby="formTitle">
+        <h2 id="formTitle">Enter details</h2>
+
+        <label for="name">Full name</label>
+        <input id="name" type="text" placeholder="Your name" oninput="updateResume()">
+
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="you@example.com" oninput="updateResume()">
+
+        <label for="phone">Phone</label>
+        <input id="phone" type="tel" placeholder="+91 9XXXXXXXXX" oninput="updateResume()">
+
+        <label for="summary">Profile summary</label>
+        <textarea id="summary" placeholder="Short professional summary" oninput="updateResume()"></textarea>
+
+        <label>Education</label>
+        <div id="educationList"></div>
+        <button type="button" onclick="addEducation()" style="margin-top:8px;background:#0b63d6">+ Add education</button>
+
+        <label style="margin-top:12px">Experience</label>
+        <div id="experienceList"></div>
+        <button type="button" onclick="addExperience()" style="margin-top:8px;background:#0b63d6">+ Add experience</button>
+
+        <label style="margin-top:12px">Skills (comma separated)</label>
+        <input id="skillsInput" placeholder="JavaScript, Python, SQL" oninput="updateResume()">
+      </section>
+
+      <!-- Preview panel -->
+      <aside class="panel">
+        <div class="resume-preview" id="resumePreview">
+          <div class="resume-header">
+            <div>
+              <h2 id="rName">Your Name</h2>
+              <div style="color:var(--muted)" id="rContact">Email • Phone</div>
+            </div>
+          </div>
+
+          <div style="margin-top:8px">
+            <strong>Summary</strong>
+            <p id="rSummary" style="margin:6px 0;color:var(--muted)"></p>
+          </div>
+
+          <div style="margin-top:8px">
+            <strong>Education</strong>
+            <div id="rEducation"></div>
+          </div>
+
+          <div style="margin-top:8px">
+            <strong>Experience</strong>
+            <div id="rExperience"></div>
+          </div>
+
+          <div style="margin-top:8px">
+            <strong>Skills</strong>
+            <div class="skills-list" id="rSkills"></div>
+          </div>
+
+          <div style="margin-top:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:.95rem;color:var(--muted)">Profile completion</div>
+              <div id="percentText">0%</div>
+            </div>
+            <div class="progress-bar"><div class="progress" id="completionBar"></div></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    // State
+    let eduCount = 0;
+    let expCount = 0;
+
+    // Helpers
+    function sanitize(s){ return String(s || '').trim(); }
+
+    // Add education block
+    function addEducation(data = {}) {
+      eduCount++;
+      const id = 'edu_' + eduCount;
+      const container = document.getElementById('educationList');
+      const div = document.createElement('div');
+      div.className = 'edu-item';
+      div.id = id;
+      div.innerHTML = `
+        <button class="remove-btn" title="Remove" onclick="removeItem('${id}')">✕</button>
+        <input placeholder="Degree / Course (e.g. B.E. Computer Engineering)" oninput="updateResume()" id="${id}_degree" value="${data.degree||''}">
+        <div class="row">
+          <input placeholder="Institute" oninput="updateResume()" id="${id}_inst" value="${data.institute||''}">
+          <input placeholder="Year (eg. 2025)" oninput="updateResume()" id="${id}_year" value="${data.year||''}">
+        </div>
+      `;
+      container.appendChild(div);
+      updateResume();
+    }
+
+    // Add experience block
+    function addExperience(data = {}) {
+      expCount++;
+      const id = 'exp_' + expCount;
+      const container = document.getElementById('experienceList');
+      const div = document.createElement('div');
+      div.className = 'exp-item';
+      div.id = id;
+      div.innerHTML = `
+        <button class="remove-btn" title="Remove" onclick="removeItem('${id}')">✕</button>
+        <input placeholder="Role / Title (e.g. Intern, SDE)" oninput="updateResume()" id="${id}_role" value="${data.role||''}">
+        <div class="row">
+          <input placeholder="Company / Org" oninput="updateResume()" id="${id}_company" value="${data.company||''}">
+          <input placeholder="Duration (eg. Jun 2023 - Aug 2024)" oninput="updateResume()" id="${id}_dur" value="${data.duration||''}">
+        </div>
+        <textarea placeholder="Brief responsibilities & achievements" oninput="updateResume()" id="${id}_desc">${data.desc||''}</textarea>
+      `;
+      container.appendChild(div);
+      updateResume();
+    }
+
+    // Remove block by id
+    function removeItem(id){
+      const el = document.getElementById(id);
+      if(el) el.remove();
+      updateResume();
+    }
+
+    // Update preview and completion
+    function updateResume(){
+      const name = sanitize(document.getElementById('name').value);
+      const email = sanitize(document.getElementById('email').value);
+      const phone = sanitize(document.getElementById('phone').value);
+      const summary = sanitize(document.getElementById('summary').value);
+      const skillsInput = sanitize(document.getElementById('skillsInput').value);
+
+      document.getElementById('rName').textContent = name || 'Your Name';
+      document.getElementById('rContact').textContent = (email || 'Email') + (phone ? ' • ' + phone : (email ? '' : ' • Phone'));
+      document.getElementById('rSummary').textContent = summary;
+
+      // Education
+      const edus = [];
+      document.querySelectorAll('#educationList .edu-item').forEach(node => {
+        const d = sanitize(node.querySelector('input[id$="_degree"]').value);
+        const inst = sanitize(node.querySelector('input[id$="_inst"]').value);
+        const y = sanitize(node.querySelector('input[id$="_year"]').value);
+        if(d || inst || y){
+          edus.push({d, inst, y});
+        }
+      });
+      const rEdu = document.getElementById('rEducation');
+      rEdu.innerHTML = '';
+      edus.forEach(e => {
+        const el = document.createElement('div');
+        el.style.marginTop = '6px';
+        el.innerHTML = `<div style="font-weight:600">${e.d || ''} <span style="color:var(--muted);font-weight:400"> ${e.y ? '• '+e.y : ''}</span></div>
+                        <div style="color:var(--muted)">${e.inst || ''}</div>`;
+        rEdu.appendChild(el);
+      });
+
+      // Experience
+      const exps = [];
+      document.querySelectorAll('#experienceList .exp-item').forEach(node => {
+        const role = sanitize(node.querySelector('input[id$="_role"]').value);
+        const comp = sanitize(node.querySelector('input[id$="_company"]').value);
+        const dur = sanitize(node.querySelector('input[id$="_dur"]').value);
+        const desc = sanitize(node.querySelector('textarea[id$="_desc"]').value);
+        if(role || comp || dur || desc){
+          exps.push({role, comp, dur, desc});
+        }
+      });
+      const rExp = document.getElementById('rExperience');
+      rExp.innerHTML = '';
+      exps.forEach(e => {
+        const el = document.createElement('div');
+        el.style.marginTop = '6px';
+        el.innerHTML = `<div style="font-weight:600">${e.role || ''} <span style="color:var(--muted);font-weight:400">${e.dur ? '• '+e.dur : ''}</span></div>
+                        <div style="color:var(--muted)">${e.comp || ''}</div>
+                        <div style="margin-top:6px;color:var(--muted);font-size:.95rem">${e.desc || ''}</div>`;
+        rExp.appendChild(el);
+      });
+
+      // Skills
+      const skills = skillsInput.split(',').map(s => s.trim()).filter(Boolean);
+      const rSkills = document.getElementById('rSkills');
+      rSkills.innerHTML = '';
+      skills.forEach(s => {
+        const el = document.createElement('div');
+        el.className = 'skill-tag';
+        el.textContent = s;
+        rSkills.appendChild(el);
+      });
+
+      // Completion percent: simple heuristic across fields and number of entries
+      let filled = 0;
+      const total = 7; // name,email,phone,summary,at least one edu, at least one exp, skills
+      if(name) filled++;
+      if(email) filled++;
+      if(phone) filled++;
+      if(summary) filled++;
+      if(edus.length > 0) filled++;
+      if(exps.length > 0) filled++;
+      if(skills.length > 0) filled++;
+      const pct = Math.round((filled / total) * 100);
+      document.getElementById('completionBar').style.width = pct + '%';
+      document.getElementById('percentText').textContent = pct + '%';
+    }
+
+    // Clear everything
+    function clearForm(){
+      document.getElementById('name').value = '';
+      document.getElementById('email').value = '';
+      document.getElementById('phone').value = '';
+      document.getElementById('summary').value = '';
+      document.getElementById('skillsInput').value = '';
+      document.getElementById('educationList').innerHTML = '';
+      document.getElementById('experienceList').innerHTML = '';
+      eduCount = 0; expCount = 0;
+      updateResume();
+    }
+
+    // Print helper (opens print dialog; user can Save as PDF in browser)
+    function printResume(){
+      // Expand for print: nothing to specifically expand, but trigger print dialog
+      window.print();
+    }
+
+    // Add a default initial entry to help users
+    (function init(){
+      // start with one education and one experience row
+      addEducation({degree:'B.E. Computer Engineering', institute:'Your University', year:'2025'});
+      addExperience({role:'Intern', company:'Company Name', duration:'Jun 2024 - Aug 2024', desc:'Worked on project X. Responsibilities included A, B and C.'});
+      // and update
+      updateResume();
+    })();
+  </script>
+</body>
+</html>
